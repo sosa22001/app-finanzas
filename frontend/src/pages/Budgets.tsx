@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Plus, Trash2 } from 'lucide-react';
 import { api, apiError } from '../lib/api';
 import { currencySymbol, formatMoney, MONTH_NAMES } from '../lib/format';
 import { useFetch } from '../hooks/useApi';
@@ -91,9 +91,11 @@ export default function Budgets() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {data.map((b) => {
-            const over = b.percent >= 100;
-            const near = b.percent >= 80 && !over;
-            const color = over ? '#e11d48' : near ? '#f59e0b' : (b.category?.color ?? '#4f46e5');
+            // Gastar exactamente el presupuesto no es excederse: eso es dar en el blanco.
+            const over = b.spent > b.amount;
+            const exact = !over && b.percent >= 100;
+            const near = b.percent >= 80 && !over && !exact;
+            const color = over ? '#e11d48' : exact ? '#10b981' : near ? '#f59e0b' : (b.category?.color ?? '#4f46e5');
 
             return (
               <Card key={b.id}>
@@ -124,16 +126,22 @@ export default function Budgets() {
                   </p>
                 </div>
 
-                {(over || near) && (
+                {(over || exact || near) && (
                   <div
                     className={`mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium ${
                       over
                         ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
-                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+                        : exact
+                          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
                     }`}
                   >
-                    <AlertTriangle size={14} />
-                    {over ? 'Superaste el presupuesto' : 'Te estás acercando al límite'}
+                    {exact ? <Check size={14} /> : <AlertTriangle size={14} />}
+                    {over
+                      ? 'Superaste el presupuesto'
+                      : exact
+                        ? 'Justo en el presupuesto'
+                        : 'Te estás acercando al límite'}
                   </div>
                 )}
               </Card>
