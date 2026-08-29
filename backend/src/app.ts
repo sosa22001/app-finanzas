@@ -9,6 +9,7 @@ import budgets from './routes/budgets';
 import categories from './routes/categories';
 import dashboard from './routes/dashboard';
 import goals from './routes/goals';
+import keepalive from './routes/keepalive';
 import loans from './routes/loans';
 import transactions from './routes/transactions';
 import transfers from './routes/transfers';
@@ -50,6 +51,9 @@ app.get('/api/health', (_req, res) => {
   }
   return res.json({ ok: true });
 });
+
+// Sin auth: la llama el cron diario para que Supabase no pause el proyecto
+app.use('/api/keepalive', keepalive);
 
 // Todo lo demás requiere sesión de Supabase
 app.use('/api/transactions', requireAuth, transactions);
