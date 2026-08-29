@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+*.log
+.DS_Store
+.vscode/
+.vercel/
+
+# Notas personales y credenciales que viven en esta carpeta — nunca al repo
+*.txt
+!requirements.txt
