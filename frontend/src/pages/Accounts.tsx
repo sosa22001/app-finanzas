@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { ArrowLeftRight, Plus, Trash2, Wallet } from 'lucide-react';
+import { ArrowLeftRight, Pencil, Plus, Trash2, Wallet } from 'lucide-react';
 import { api, apiError } from '../lib/api';
 import { ACCOUNT_TYPES, accountTypeLabel, currencySymbol, formatDate, formatMoney, todayISO } from '../lib/format';
 import type { Account, Transfer } from '../types';
@@ -13,7 +13,18 @@ export default function Accounts() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [accountModal, setAccountModal] = useState(false);
+  const [editing, setEditing] = useState<Account | null>(null);
   const [transferModal, setTransferModal] = useState(false);
+
+  const openNew = () => {
+    setEditing(null);
+    setAccountModal(true);
+  };
+
+  const openEdit = (a: Account) => {
+    setEditing(a);
+    setAccountModal(true);
+  };
 
   const load = async () => {
     setLoading(true);
@@ -59,7 +70,7 @@ export default function Accounts() {
             <ArrowLeftRight size={16} />
             Transferir
           </Button>
-          <Button onClick={() => setAccountModal(true)}>
+          <Button onClick={openNew}>
             <Plus size={16} />
             Nueva cuenta
           </Button>
@@ -73,7 +84,7 @@ export default function Accounts() {
           <EmptyState
             title="No tienes cuentas"
             description="Crea una cuenta (efectivo, banco, ahorro…) para registrar tus movimientos."
-            action={<Button onClick={() => setAccountModal(true)}><Plus size={16} />Crear cuenta</Button>}
+            action={<Button onClick={openNew}><Plus size={16} />Crear cuenta</Button>}
           />
         </Card>
       ) : (
@@ -93,13 +104,22 @@ export default function Accounts() {
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => void removeAccount(a)}
-                  className="rounded p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
-                  aria-label="Eliminar cuenta"
-                >
-                  <Trash2 size={15} />
-                </button>
+                <div className="flex shrink-0 gap-1">
+                  <button
+                    onClick={() => openEdit(a)}
+                    className="rounded p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800"
+                    aria-label="Editar cuenta"
+                  >
+                    <Pencil size={15} />
+                  </button>
+                  <button
+                    onClick={() => void removeAccount(a)}
+                    className="rounded p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/40"
+                    aria-label="Eliminar cuenta"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
               </div>
 
               <p
@@ -156,8 +176,13 @@ export default function Accounts() {
         )}
       </Card>
 
-      <Modal open={accountModal} onClose={() => setAccountModal(false)} title="Nueva cuenta">
+      <Modal
+        open={accountModal}
+        onClose={() => setAccountModal(false)}
+        title={editing ? `Editar "${editing.name}"` : 'Nueva cuenta'}
+      >
         <AccountForm
+          editing={editing}
           onCancel={() => setAccountModal(false)}
           onSaved={() => {
             setAccountModal(false);
@@ -181,11 +206,17 @@ export default function Accounts() {
 }
 
 /* ------------------------------------------------------------ AccountForm */
-function AccountForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () => void }) {
-  const [name, setName] = useState('');
-  const [type, setType] = useState<string>('cash');
-  const [initialBalance, setInitialBalance] = useState('0');
-  const [institution, setInstitution] = useState('');
+function AccountForm({
+  editing, onSaved, onCancel,
+}: {
+  editing: Account | null;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(editing?.name ?? '');
+  const [type, setType] = useState<string>(editing?.type ?? 'cash');
+  const [initialBalance, setInitialBalance] = useState(String(editing?.initial_balance ?? '0'));
+  const [institution, setInstitution] = useState(editing?.institution ?? '');
   const [last4, setLast4] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -194,15 +225,19 @@ function AccountForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () 
     e.preventDefault();
     setError(null);
     setSaving(true);
+
+    const payload = {
+      name: name.trim(),
+      type,
+      initial_balance: Number(initialBalance) || 0,
+      currency: 'HNL',
+      institution: institution.trim() || null,
+      last4: /^\d{4}$/.test(last4) ? last4 : null,
+    };
+
     try {
-      await api.post('/accounts', {
-        name: name.trim(),
-        type,
-        initial_balance: Number(initialBalance) || 0,
-        currency: 'HNL',
-        institution: institution.trim() || null,
-        last4: /^\d{4}$/.test(last4) ? last4 : null,
-      });
+      if (editing) await api.put(`/accounts/${editing.id}`, payload);
+      else await api.post('/accounts', payload);
       onSaved();
     } catch (err) {
       setError(apiError(err));
@@ -226,7 +261,7 @@ function AccountForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () 
           </Select>
         </Field>
 
-        <Field label="Balance inicial">
+        <Field label="Balance inicial" hint="El dinero que ya tenías antes de empezar a registrar">
           <div className="relative">
             <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
               {currencySymbol()}
@@ -260,7 +295,9 @@ function AccountForm({ onSaved, onCancel }: { onSaved: () => void; onCancel: () 
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="secondary" onClick={onCancel}>Cancelar</Button>
-        <Button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Crear cuenta'}</Button>
+        <Button type="submit" disabled={saving}>
+          {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear cuenta'}
+        </Button>
       </div>
     </form>
   );
